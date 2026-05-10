@@ -1,0 +1,20 @@
+version: '3.8'
+services:
+  backend:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: back-ep2
+    ports:
+      - "3001:3001"
+    networks:
+      - tienda-network
+    environment:
+      - DB_HOST=db-ep2
+      - DB_USER=alumno
+      - DB_PASSWORD=alumno123
+      - DB_NAME=tienda_perritos
+
+networks:
+  tienda-network:
+    driver: bridge
