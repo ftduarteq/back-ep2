@@ -45,7 +45,7 @@ jobs:
             "sudo docker pull ${{ secrets.ECR_REPO_URL_BACKEND }}:latest",
             "sudo docker stop tienda-backend || true",
             "sudo docker rm tienda-backend || true",
-            "sudo docker run -d --name tienda-backend -p 3001:3001 ${{ secrets.ECR_REPO_URL_BACKEND }}:latest"
+            "sudo docker run -d --name tienda-backend -p 3001:3001 -e DB_HOST=10.0.2.148 -e DB_USER=alumno -e DB_PASSWORD=alumno123 -e DB_NAME=tienda_perritos ${{ secrets.ECR_REPO_URL_BACKEND }}:latest"
           ]}' \
           --output text
           
