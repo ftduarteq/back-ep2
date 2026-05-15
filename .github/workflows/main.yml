@@ -1,17 +1,28 @@
+# Nombre del workflow de Integración y Despliegue Continuo
 name: CI/CD Tienda Perritos - Backend
 
+# Condiciones bajo las cuales GitHub Actions lanzará automáticamente este pipeline
 on:
   push:
+    # Solo se ejecutará si detecta nuevos "commits" en la rama "deploy"
     branches: [ "deploy" ]
+    paths-ignore:
+      - 'README.md'
 
+# Agrupación de trabajos que se ejecutarán
 jobs:
   build-push-deploy-backend:
+    # Indica que el pipeline se ejecutará en un contenedor Linux Ubuntu alojado en GitHub
     runs-on: ubuntu-latest
 
+    # Secuencia de pasos individuales que conforman el despliegue
     steps:
+    # Paso 1: Acción predefinida para clonar el repositorio de código dentro del runner
     - name: Checkout código
       uses: actions/checkout@v3
 
+    # Paso 2: Configura las credenciales de Amazon Web Services
+    # Lee las llaves desde la sección Secrets de GitHub para no exponerlas en el código
     - name: Configurar credenciales AWS
       uses: aws-actions/configure-aws-credentials@v4
       with:
@@ -20,32 +31,46 @@ jobs:
         aws-session-token: ${{ secrets.AWS_SESSION_TOKEN }}
         aws-region: ${{ secrets.AWS_REGION }}
 
+    # Paso 3: Autentica el runner de GitHub contra Amazon ECR (Elastic Container Registry)
     - name: Login en Amazon ECR (runner)
       uses: aws-actions/amazon-ecr-login@v1
 
+    # Paso 4: Creación de la imagen Docker de backend y carga en el repositorio
     - name: Build imagen Backend y push a ECR
       run: |
+        # Construye la imagen usando el Dockerfile y le da el nombre temporal "tienda-backend"
         docker build -t tienda-backend .
+        # Asocia la imagen temporal con la URL remota del registro ECR (Guardada en un GitHub Secret)
         docker tag tienda-backend:latest ${{ secrets.ECR_REPO_URL_BACKEND }}:latest
+        # Sube la imagen empaquetada a AWS para que la instancia EC2 pueda descargarla luego
         docker push ${{ secrets.ECR_REPO_URL_BACKEND }}:latest
 
+    # Paso 5: Un breve retraso de 60 segundos
+    # Evita fallos si la instancia EC2 se reinició recientemente y su agente SSM aún no reporta estado "Online"
     - name: Pausa de estabilización SSM
       run: sleep 60
 
+    # Paso 6: Envío de la orden de despliegue a la máquina de AWS
     - name: Desplegar Backend vía SSM
       run: |
+        # Usa AWS CLI para comunicarse con Systems Manager y enviar comandos de consola a la instancia remota
         aws ssm send-command \
           --instance-ids ${{ secrets.EC2_BACKEND_INSTANCE_ID }} \
           --document-name "AWS-RunShellScript" \
           --comment "Actualizar tienda-backend desde ECR" \
           --parameters '{"commands":[
-            "set -e",
-            "export PATH=$PATH:/usr/local/bin",
+            "set -e", # Le dice al shell que se detenga y arroje error si cualquier comando falla
+            "export PATH=$PATH:/usr/local/bin", # Arregla posibles problemas de PATH con el comando docker
+            # Loguea a la máquina EC2 en Amazon ECR usando un token temporal seguro
             "aws ecr get-login-password --region ${{ secrets.AWS_REGION }} | sudo docker login --username AWS --password-stdin ${{ secrets.ECR_REGISTRY }}",
+            # Descarga la versión más fresca de la imagen del backend que subimos en el paso 4
             "sudo docker pull ${{ secrets.ECR_REPO_URL_BACKEND }}:latest",
+            # Apaga el contenedor en ejecución (si lo hay) para liberar el puerto 3001
             "sudo docker stop tienda-backend || true",
+            # Elimina el contenedor antiguo del disco (|| true evita errores si no existía)
             "sudo docker rm tienda-backend || true",
+            # Levanta un nuevo contenedor (-d = en fondo), mapeando el puerto 3001,
+            # e inyectando las credenciales de la BD MySQL como Variables de Entorno (-e).
             "sudo docker run -d --name tienda-backend -p 3001:3001 -e DB_HOST=10.0.2.148 -e DB_USER=alumno -e DB_PASSWORD=alumno123 -e DB_NAME=tienda_perritos ${{ secrets.ECR_REPO_URL_BACKEND }}:latest"
           ]}' \
           --output text
-          
