@@ -1,20 +1,38 @@
+# Define la versión de la sintaxis de Docker Compose que estamos utilizando
 version: '3.8'
+
+# Sección principal donde se definen todos los contenedores (servicios) que levantaremos
 services:
+  # Definimos nuestro servicio de Node.js (el backend)
   backend:
+    # Bloque de compilación: indica a Docker Compose cómo construir la imagen de este servicio
     build:
+      # Contexto: "." significa que usará el directorio actual para buscar los archivos
       context: .
+      # Especifica qué archivo Dockerfile leer para construir la imagen
       dockerfile: Dockerfile
+    
+    # Le damos un nombre explícito al contenedor que se creará
     container_name: back-ep2
+    
+    # Mapeo de puertos ("Host:Contenedor"). Expone el puerto 3001 del contenedor en el puerto 3001 de la máquina local
     ports:
       - "3001:3001"
+      
+    # Conecta este servicio a una red virtual personalizada (para que los contenedores se vean entre sí)
     networks:
       - tienda-network
+      
+    # Inyecta variables de entorno dentro del contenedor (útil para el entorno de desarrollo local)
     environment:
       - DB_HOST=db-ep2
       - DB_USER=alumno
       - DB_PASSWORD=alumno123
       - DB_NAME=tienda_perritos
 
+# Definición de las redes virtuales de este proyecto local
 networks:
+  # Crea una red llamada "tienda-network"
   tienda-network:
+    # Usa el driver por defecto "bridge", que crea una red aislada interna dentro de la máquina anfitriona
     driver: bridge
